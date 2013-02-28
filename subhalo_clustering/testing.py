@@ -19,30 +19,6 @@ numProcs = 10
 run48 = False   
 run2000 = True
 
-from scipy import weave
-cos = np.cos
-sin = np.sin
-arcsin = np.arcsin
-sqrt = np.sqrt
-
-def dist(X,Y):
-    # Use Haverside Formula http://en.wikipedia.org/wiki/Great-circle_distance
-    n = len(X)
-    support = "#include <math.h>"
-    d = np.zeros(n)
-    code = """
-    
-    for (int i=1;i<n;i++)
-    {
-        //printf("%F\\n", X[0]*X[i]);
-        d[i] = 2.*asin(sqrt(pow(sin( .5*(Y[0]-Y[i])),2.) + cos(Y[0])*cos(Y[i])*pow(sin(.5*(X[0]-X[i])),2.)));
-    }
-    """
-    weave.inline(code,['n','X','Y','d'],support_code = support, libraries = ['m'])
-    
-    return 
-    
-
 def testing():
 #    profile = ('PULSAR',)    
 #    fileOut = 'PULSARRateMapHESS.pickle'
@@ -52,19 +28,19 @@ def testing():
     #pickle.dump(mcSims, open('test.sim','wb'))
     times1, times2 = [],[]
     nphotons = np.logspace(1, 4, 10)
-    nphotons = [10000,]
+    nphotons = [200,]
     import time
     
     for i in nphotons:
         #mcSims = MC.RUN_PULSAR(10, fileOut, numPhotons=int(i),numPulsars=1,angularSize=angularSize2, outputSize=outputSize, mcList='test.pickle',HESS=False)
-        mcSims = MC.RUN(5, fileOut, numPhotons=int(i),angularSize=angularSize2, outputSize=outputSize, mcList='test.pickle',HESS=False)
+        #mcSims = MC.RUN(1, fileOut, numPhotons=int(i),angularSize=angularSize2, outputSize=outputSize, mcList='test.pickle',HESS=False)
         
         mcSims = pickle.load(open('test.pickle','r'))
         start = time.time()
-        dbscanresults = MCSTATS.DBSCAN_Compute_Clusters(mcSims, eps=.1, n_cluster=30, nCore=3, S_cut=2.0, numAnalyze=0,  HESS=True, angularSize=angularSize2, indexing = False)
+        #dbscanresults = MCSTATS.DBSCAN_Compute_Clusters(mcSims, eps=.1, min_samples=30, nCorePoints=3, S_cut=2.0, numAnalyze=0,  HESS=True, angularSize=angularSize2, indexing = False)
         elapsed1 = time.time()-start
         start = time.time()
-        dbscanresults = MCSTATS.DBSCAN_Compute_Clusters(mcSims, eps=.1, n_cluster=30, nCore=3, S_cut=2.0, numAnalyze=0,  HESS=True, angularSize=angularSize2, indexing = True)
+        dbscanresults = MCSTATS.DBSCAN_Compute_Clusters(mcSims, eps=.1, min_samples=3, nCorePoints=3, S_cut=2.0, numAnalyze=0,  HESS=True, angularSize=angularSize2, indexing = True)
         elapsed2 = time.time()-start
         print 'nPhotons, Times:', i, elapsed1, elapsed2
         times1.append(elapsed1)

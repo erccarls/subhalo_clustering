@@ -24,14 +24,14 @@ from multiprocessing import pool
 from functools import partial
 
 
-def DBSCAN_Compute_Clusters(mcSims, eps = 0.1875,n_cluster = 3,nCore = 3, S_cut=2.0,numAnalyze=0, fileout = '',BGTemplate = 'BGRateMap.pickle', HESS = False, angularSize = 10.,SNR= 0.75,numProcs = 10, indexing = True):
+def DBSCAN_Compute_Clusters(mcSims, eps = 0.1875,min_samples = 3,nCorePoints = 3, S_cut=2.0,numAnalyze=0, fileout = '',BGTemplate = 'BGRateMap.pickle', HESS = False, angularSize = 10.,SNR= 0.75,numProcs = 10, indexing = True):
     '''
     Main DBSCAN cluster method.  Input a list of simulation outputs and output a list of clustering properties for each simulation.
     Inputs:
         mcSims: this is the output from the runMC methods (i.e. the list of simulation outputs) (python object not filename)
         eps: DBSCAN epsilon parameter
-        n_cluster: min num points in epislon neighborhood for the DBSCAN algorithm.
-        nCore: After DBSCAN is run, there must be at least this many points for a cluster to not be thrown out.
+        min_samples: min num points in epislon neighborhood for the DBSCAN algorithm.
+        nCorePoints: After DBSCAN is run, there must be at least this many points for a cluster to not be thrown out.
         S_cut: Clusters used in statistics must be at least this significance level
         numAnalyze: number of simulations to analyze out of list.  default is 0 which analyzes all of them
         fileout: if not empty string, determines the file to store all the clustering info.
@@ -43,107 +43,74 @@ def DBSCAN_Compute_Clusters(mcSims, eps = 0.1875,n_cluster = 3,nCore = 3, S_cut=
 
     '''
     
+    # Initialize the thread pool
+    if (numProcs<=0):numProcs += mp.cpu_count()
+    p = pool.Pool(numProcs)
+    
+    # Check number to analyze
     if ((numAnalyze == 0) or (numAnalyze > len(mcSims))):
         numAnalyze =len(mcSims)
+    print 'Analyzing ' + str(numAnalyze) + ' simulations using ' , numProcs, " CPUs..."
     
-    print 'Analyzing ' + str(numAnalyze) + ' simulations...'
+    # Define a single input function callable by each thread (async map can only take one argument)
+    def DBSCAN_THREAD(sim, eps, min_samples,nCorePoints,indexing= None):
+        X = zip(sim[0],sim[1])
+        return (DBSCAN.RunDBScan(X, eps, min_samples,nCorePoints = nCorePoints, indexing = indexing), len(X[0]))
+    DBSCAN_PARTIAL = partial(DBSCAN_THREAD,  eps=eps, min_samples=min_samples,nCorePoints = nCorePoints)
     
-    if (HESS == True):
-            BGTemplate = 'BGRateMap_HESS_2_deg.pickle'
-            SNR = .95
+    # Call async map. 
+    dbscanResults = p.map(DBSCAN_PARTIAL, mcSims[:numAnalyze])
+
+    # Serial Version.  Only use for debugging
+    #dbscanResults = map(DBSCAN_PARTIAL, mcSims[:numAnalyze])
+    
+    # Single Call Version. Useful for Debugging
+    #dbscanResults = DBSCAN_THREAD(mcSims[0],  eps=eps, min_samples=min_samples,nCorePoints = nCorePoints)
+
     
     BGTemplate = pickle.load(open(BGTemplate,'r'))
-    
-    cluster_Count = []   # Mean Number of clusters found
-    cluster_Scale = []   # Mean Cluster Scale weighted by significance
-    cluster_S = []       # Mean Significance weighted by number of cluster members
-    cluster_Members = [] # Mean number of cluster Members
+
+    cluster_S = []       # Mean Significance weighted by number of cluster members for ALL CLUSTERS    
+    cluster_Count = []   # Mean Number of clusters found s>s_cut
+    cluster_Scale = []   # Mean Cluster Scale weighted by significance for S>s_cut
+    cluster_Members = [] # Mean number of cluster Members s> s_cut
     cluster_Out = []     # for each sim a tuple of (cluster_s, num_members) for each cluster in the simulation.
     
     
-    #p = pool.Pool(numProcs)
-    
-    DBSCAN_PARTIAL = partial(DBSCAN_THREAD,  eps=eps, n_cluster=n_cluster,nCore = nCore, plot=False, indexing=indexing)
-    #dbscanResults = p.map(DBSCAN_PARTIAL, mcSims[:numAnalyze])
-    
-    
-    # Serial Version
-    dbscanResults = map(DBSCAN_PARTIAL, mcSims[:numAnalyze])
-    
-    #print np.shape(mcSims[0])
-    #dbscanResults = DBSCAN.RunDBScan(mcSims[0], eps=eps, n_samples=n_cluster,nCore = nCore, plot=False)
-    
-    return dbscanResults
-        
     for sim in dbscanResults:
-        
-        ((clusters, clusterCount, noiseCount),numPhotons) = sim
-
+        clusters,labels = sim
+        numPhotons = len(labels) 
         #===========================================================================
         # Compute Cluster Properties
-        #===========================================================================
-        clusterSigsAll = []
-        clusterMembersAll = []
+        #===========================================================================     
+        # Determine Cluster Significance from background template
+        S = [DBSCAN.Compute_Cluster_Significance(cluster, BGTemplate, numPhotons,angularSize = angularSize,SNR = SNR) for cluster in clusters]
+        # Number of clusters
+        clusterMembersAll = [len(cluster) for cluster in clusters]
+        # list of pairs (s,num members) for each cluster
+        cluster_Out.append(zip(S, clusterMembersAll))
+        # S>S_Cut Cluster Indexes
+        sigClustersIDX = np.where((S>=S_cut))[0]
+        # S>S_Cut Clusters
+        sigClusters = clusters[clusters]
         
-        clusterSigs = []
-        clusterDist = []
-        clusterSigmas = []
-        clusterMembers = []
-        clustersOut= []
-        N_clust = 0
-         
-        for cluster in clusters:
-            S =  DBSCAN.Compute_Cluster_Significance(cluster, BGTemplate, numPhotons,angularSize = angularSize,SNR = SNR)
-            
-            # Keep a list of all the clusters found adn their weights
-            clusterSigsAll.append(S)
-            clusterMembersAll.append(len(cluster))
-            
-            clustersOut.append( (S,len(cluster)) ) # Append individual cluster sigs as well
-            
-            
-            if S>S_cut:
-                d, sigma = DBSCAN.Compute_Cluster_Scale(cluster)  # compute the cluster Scale
-                #d, sigma = 0,0  # compute the cluster Scale
-                clusterSigs.append(S)
-                clusterDist.append(d)
-                clusterSigmas.append(sigma)
-                clusterMembers.append(len(cluster))
-                #print S, d, len(cluster)
-                N_clust +=1
-                
-        # If no clusters found default to zero significance
-        if len(clusters) == 0:
-            clusterSigsAll.append(0.0)
-            clusterMembersAll.append(1.0)
-            
+        sigs = S[sigClustersIDX]
+        # Compute Cluster Scales
+        scale = [DBSCAN.Compute_Cluster_Scale(cluster)[0] for cluster in sigClusters]
+        # S>S_Cut Cluster Member Counts
+        members = clusterMembersAll[sigClustersIDX]
         
-        cluster_Out.append(clustersOut)
-        
-        #if len(clusterSigs)==0:
-            #continue
-            
         
         #===========================================================================
         # Compute Weighted Means and append to master list 
         #===========================================================================
         # Append All cluster sigs.  Rest of quantities require S>2.0
         #cluster_S.append(np.average(clusterSigs,weights = clusterMembers))
-        cluster_S.append(np.average(clusterSigsAll,weights = clusterMembersAll))
-        cluster_Count.append(N_clust)
-        if len(clusterSigs)!=0:
-            clusterScale = np.average(clusterDist, weights = clusterSigs)
-            cluster_Scale.append(clusterScale)
-            clusterMems = np.average(clusterMembers, weights = clusterSigs)
-            cluster_Members.append(clusterMems)
-        
-        
-        #=======================================================================
-        # Status Output
-        #=======================================================================
-#        if (count%5==0):
-#            sys.stdout.write('\r' + str(count+1)+'/'+str(numAnalyze))
-#            sys.stdout.flush()
+        cluster_S.append(np.average(S,weights = clusterMembersAll))
+        cluster_Count.append(len(sigs))
+        if len(sigs)!=0:
+            cluster_Scale.append(np.average(scale, weights = sigs))
+            cluster_Members.append(np.average(members, weights = sigs))
         
     output = (cluster_Scale, cluster_S, cluster_Count, cluster_Members, cluster_Out)
     # Write results to file
@@ -151,9 +118,7 @@ def DBSCAN_Compute_Clusters(mcSims, eps = 0.1875,n_cluster = 3,nCore = 3, S_cut=
         pickle.dump(output, open(fileout, 'wb'))
     return output
 
-def DBSCAN_THREAD(sim, eps, n_cluster,nCore , plot=False,indexing= True):
-    X = zip(sim[0],sim[1])
-    return (DBSCAN.RunDBScan(X, eps, n_cluster,nCore = nCore, plot=False, indexing = indexing), len(X[0]))
+
 
 #################################################################################################
 # Plotting Tools
