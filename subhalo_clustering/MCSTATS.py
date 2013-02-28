@@ -24,23 +24,23 @@ from multiprocessing import pool
 from functools import partial
 
 
-def DBSCAN_Compute_Clusters(mcSims, eps = 0.1875,min_samples = 3,nCorePoints = 3, S_cut=2.0,numAnalyze=0, fileout = '',BGTemplate = 'BGRateMap.pickle', HESS = False, angularSize = 10.,SNR= 0.75,numProcs = 10, indexing = True):
+def DBSCAN_Compute_Clusters(mcSims, eps, min_samples ,nCorePoints = 3, numAnalyze=0, fileout = '',numProcs = 1):
     '''
     Main DBSCAN cluster method.  Input a list of simulation outputs and output a list of clustering properties for each simulation.
     Inputs:
         mcSims: this is the output from the runMC methods (i.e. the list of simulation outputs) (python object not filename)
         eps: DBSCAN epsilon parameter
         min_samples: min num points in epislon neighborhood for the DBSCAN algorithm.
-        nCorePoints: After DBSCAN is run, there must be at least this many points for a cluster to not be thrown out.
-        S_cut: Clusters used in statistics must be at least this significance level
-        numAnalyze: number of simulations to analyze out of list.  default is 0 which analyzes all of them
-        fileout: if not empty string, determines the file to store all the clustering info.
-        BGTemplate: background template filename.
-        -SNR is the percentage of photons that are background
-        
-    return: (cluster_Scale, cluster_S, cluster_Count, cluster_Members, cluster_stdevs) as described in draft 
-        -cluster_stdevs is the significance weighted RMS of the clustering scale 
-
+    Optional Inputs:
+        nCorePoints=3: After DBSCAN is run, there must be at least this many points for a cluster to not be thrown out.
+        numAnalyze=0 : number of simulations to analyze out of list.  default is 0 which analyzes all of them
+        fileout=''   : if not empty string, store all the clustering info in a pickle file.
+    Returns:
+        dbScanResults: a tuple (clusterReturn, labels) for each simulation
+            clusterReturn: For each cluster, a list of points in that cluster
+            labels: A list of points with cluster identification number.  -1 corresponds to noise.
+                    NOTE: ALL BORDER POINTS ARE CONSIDERED NOISE.  See DBSCAN.py for info if you need
+                    Border points.
     '''
     
     # Initialize the thread pool
@@ -52,13 +52,11 @@ def DBSCAN_Compute_Clusters(mcSims, eps = 0.1875,min_samples = 3,nCorePoints = 3
         numAnalyze =len(mcSims)
     print 'Analyzing ' + str(numAnalyze) + ' simulations using ' , numProcs, " CPUs..."
     
-    # Define a single input function callable by each thread (async map can only take one argument)
-    def DBSCAN_THREAD(sim, eps, min_samples,nCorePoints,indexing= None):
-        X = zip(sim[0],sim[1])
-        return (DBSCAN.RunDBScan(X, eps, min_samples,nCorePoints = nCorePoints, indexing = indexing), len(X[0]))
+    
+
     DBSCAN_PARTIAL = partial(DBSCAN_THREAD,  eps=eps, min_samples=min_samples,nCorePoints = nCorePoints)
     
-    # Call async map. 
+    # Call mutithreaded map. 
     dbscanResults = p.map(DBSCAN_PARTIAL, mcSims[:numAnalyze])
 
     # Serial Version.  Only use for debugging
@@ -66,25 +64,79 @@ def DBSCAN_Compute_Clusters(mcSims, eps = 0.1875,min_samples = 3,nCorePoints = 3
     
     # Single Call Version. Useful for Debugging
     #dbscanResults = DBSCAN_THREAD(mcSims[0],  eps=eps, min_samples=min_samples,nCorePoints = nCorePoints)
-
     
+    # Write to file if requested
+    if (fileout != ''): pickle.dump(dbscanResults, open(fileout,'wb'))
+    
+    return dbscanResults
+
+
+# Define a single input function callable by each thread (async map can only take one argument)
+def DBSCAN_THREAD(sim, eps, min_samples,nCorePoints,indexing= None):
+    X = zip(sim[0],sim[1])
+    return DBSCAN.RunDBScan(X, eps, min_samples,nCorePoints = nCorePoints, indexing = indexing)
+
+
+
+def Cluster_Sigs_BG(dbscanResults, BGTemplate = 'BGRateMap.pickle',angularSize = 10.,BG= 0.75,numProcs = 1):
+    """
+    Compute the cluster significances on results of DBSCAN_Compute_Clusters() using a background model.
+    
+    Inputs:
+        dbscanResults: output from DBSCAN_Compute_Clusters.  Must load from file if using pickled results
+        BGTemplate: background template filename.
+        angularSize: Size of square in degrees
+        BG: The expected percentage of photons that are background
+    """
+    # Initialize the thread pool to the correct number of threads
+    if (numProcs<=0):numProcs += mp.cpu_count()
+    p = mp.pool.Pool(numProcs)
+    
+    # Load background template
     BGTemplate = pickle.load(open(BGTemplate,'r'))
 
+    # Asynchronosly map results
+    BG_PARTIAL = partial(BG_THREAD, BGTemplate= BGTemplate, angularSize = angularSize, BG = BG)
+    return p.map(BG_PARTIAL,dbscanResults)
+
+def BG_THREAD(sim,BGTemplate, angularSize , BG ):
+    clusters,labels = sim 
+    return [DBSCAN.Compute_Cluster_Significance(cluster, BGTemplate, len(labels),angularSize = angularSize,BG = BG) for cluster in clusters]
+
+
+#===============================================================================
+# DEPRECATED 
+#===============================================================================
+def Profile_Clusters(dbscanResults, BGTemplate = 'BGRateMap.pickle',S_cut=2.0,angularSize = 10.,BG= 0.75, fileout=''):
+    """
+    Computes properties on the results of DBSCAN_Compute_Clusters()
+        input:
+            dbscanResults: output from DBSCAN_Compute_Clusters.  Must load from file if using pickled results
+        Optional Inputs
+            S_cut: Clusters used in statistics must be at least this significance level
+            BGTemplate = String with path to the background template file
+            BG: The expected percentage of photons that are background
+            
+        
+        Returns: (cluster_Scale, cluster_S, cluster_Count, cluster_Members, cluster_stdevs) as described in draft 
+            cluster_stdevs is the significance weighted RMS of the clustering scale 
+    """
+    
+    
     cluster_S = []       # Mean Significance weighted by number of cluster members for ALL CLUSTERS    
     cluster_Count = []   # Mean Number of clusters found s>s_cut
     cluster_Scale = []   # Mean Cluster Scale weighted by significance for S>s_cut
     cluster_Members = [] # Mean number of cluster Members s> s_cut
     cluster_Out = []     # for each sim a tuple of (cluster_s, num_members) for each cluster in the simulation.
-    
-    
-    for sim in dbscanResults:
+     
+    for sim in dbscanResults: 
         clusters,labels = sim
         numPhotons = len(labels) 
         #===========================================================================
         # Compute Cluster Properties
         #===========================================================================     
         # Determine Cluster Significance from background template
-        S = [DBSCAN.Compute_Cluster_Significance(cluster, BGTemplate, numPhotons,angularSize = angularSize,SNR = SNR) for cluster in clusters]
+        S = [DBSCAN.Compute_Cluster_Significance(cluster, BGTemplate, numPhotons,angularSize = angularSize,SNR = BG) for cluster in clusters]
         # Number of clusters
         clusterMembersAll = [len(cluster) for cluster in clusters]
         # list of pairs (s,num members) for each cluster
@@ -105,7 +157,6 @@ def DBSCAN_Compute_Clusters(mcSims, eps = 0.1875,min_samples = 3,nCorePoints = 3
         # Compute Weighted Means and append to master list 
         #===========================================================================
         # Append All cluster sigs.  Rest of quantities require S>2.0
-        #cluster_S.append(np.average(clusterSigs,weights = clusterMembers))
         cluster_S.append(np.average(S,weights = clusterMembersAll))
         cluster_Count.append(len(sigs))
         if len(sigs)!=0:
@@ -124,6 +175,7 @@ def DBSCAN_Compute_Clusters(mcSims, eps = 0.1875,min_samples = 3,nCorePoints = 3
 # Plotting Tools
 #################################################################################################
 
+#TODO: 
 def Plot_Cluster_Scales(models, labels,xlabel, fig, subplot, bins = 100, fileout = '', PlotFermiScale = False):
     """
     Generates the results summary plots.  See sample usage in runMC_v2
@@ -230,64 +282,7 @@ def Plot_Cluster_Scales(models, labels,xlabel, fig, subplot, bins = 100, fileout
     
 
 
-def Compute_Radial_Profiles(MCSims,numBins = 20,rmax=5.0,label = ''):
-    """
-    Computes radial event density profiles plots (from center of simulation)
-    
-    Input:
-        -MCSims: simulations list
-        -bins: radial bins, linearly spaced
-        -rmax: maximum radius to use. beware of edge effects.
-    """
-    
-    
-    ppa = 300./10. # pixels per degree
-    
-    bins = np.linspace(0, 5, numBins+1)
-    bgtemplate = pickle.load(open('BGRateMap.pickle','r'))
-    
-    BG = []
-    #print DBSCAN.Evaluate_BG_Contribution(0.0, 0.0, 10*ppa, BGTemplate=bgtemplate, numBGEvents=.75*500, flatLevel=0)
-    hists = []
-    for i in range(numBins):
-        hists.append([])
-        #bgevents = DBSCAN.Evaluate_BG_Contribution(0.0, 0.0, bins[i+1]*ppa, BGTemplate=bgtemplate, numBGEvents=.75*500, flatLevel=0)-DBSCAN.Evaluate_BG_Contribution(0.0, 0.0, bins[i]*ppa, BGTemplate=bgtemplate, numBGEvents=.75*500, flatLevel=0)
-        #BG.append(bgevents)
-        #print BG 
-    for sim in MCSims:
-        r_list = []
-        
-        xVec = sim[0]
-        yVec = sim[1]
-        
-        
-        
-        for i in range(len(xVec)):
-            # Find radius from center
-            r_list.append(math.sqrt(xVec[i]**2.0+yVec[i]**2.0))
-        
-        values = np.histogram(r_list, bins=bins)[0]
-        
-        # Need to compute density
-        for i in range(numBins):
-            area = math.pi* (bins[i+1]**2.0-bins[i]**2.0)
-            values[i] = float(values[i])/area
-            
-        for i in range(20):
-            hists[i].append(values[i])
-        
-    Y, YERR = [],[]
-    for i in range(20):
-        Y.append(np.mean(hists[i]))
-        YERR.append(np.std(hists[i]))
-    
-    
-    #plt.step(bins[:-1], values)
-    plt.errorbar(bins[:-1], Y, YERR,marker='o',label = label)
-    plt.yscale('log')
-    plt.xscale('log')
-    
-    return bins[:-1], Y, YERR
+
             
             
             
@@ -295,8 +290,14 @@ def Compute_Radial_Profiles(MCSims,numBins = 20,rmax=5.0,label = ''):
 # More plotting tools that are older.
 #===============================================================================
 def Plot_Rate_Map(mapName,angularSize,fileOut):
-    """Plot the map of annihilation rate."""
+    """
+    Plot the map of annihilation rate.
+        inputs:
+            mapName: string with filename to pickle file of rate map.
+            
     
+    """
+    plt.clf()
     map = pickle.load(open(mapName, "r" ))
     img = plt.imshow(map,origin='lower', extent=[-angularSize/2,angularSize/2,-angularSize/2,angularSize/2])
     plt.colorbar(orientation='vertical')
@@ -307,123 +308,35 @@ def Plot_Rate_Map(mapName,angularSize,fileOut):
 
     plt.savefig(str(fileOut)+ '.png')
     plt.show()
-    plt.clf()
     
-    
-def Plot_MC_Positions(MC,fileOut='',angularSize = 10.0):
+
+#===============================================================================
+# Quick way to plot the monte-carlo or Fermi data, just pass a tuple of coordinate
+# pairs for each positions. 
+#===============================================================================
+def Plot_MC_Positions(MC,fileOut='',angularSize = None):
     """
     Plot results of a Monte Carlo simulation.
         input:
         -MC: One Monte Carlo simulation.  If taking from a set of runs, pass mcSims[i] for the i'th simulation
-        -fileOut: if not blank string then saves the file to this name
+        -fileOut: if not blank string then saves the file to this name and does not display plot
+        -angularSize: If None, auto-scales to the min/max of simulation.  Otherwise pass the width in simulation coordinates
     """
     plt.clf()
     plt.scatter(MC[0], MC[1],color = 'b',s=4,marker='+')
-    plt.xlim(angularSize/2.0,-angularSize/2.0)
-    plt.ylim(-angularSize/2.0,angularSize/2.0)
-        
-    plt.xlabel(r'$l[^\circ]$')
-    plt.ylabel(r'$b[^\circ]$')
-    plt.title(r'Count Map')
-    if fileOut!='':
-        pp = PdfPages(fileOut + '.pdf')
-        plt.savefig(pp, format='pdf')
-        print "Figures saved to ", str(fileOut)+ '.pdf\n',
-        pp.close()
-        plt.savefig(fileOut + '.png', format='png')
-
-    plt.show()    
-
-
-def Plot_Fermi_Data(x,y,fileOut='',xLim=(-5,5),yLim=(-5,5), colormap=False, t = []):
-    """
-    Scatter plot of points
-        input: 
-            x: vector of x coords
-            y: vector of y coords
-        can also plot time dependence, but really no point.
-    """
-    
-    plt.clf()
-    fig = plt.figure(1)
-    ax1 = fig.add_subplot(1,1,1, aspect='equal')
-    
-    if (colormap == True and t != []):
-        scatter = ax1.scatter(x,y,c=t)
-        plt.colorbar(scatter)
-    else:
-        ax1.scatter(x, y)#, s=5,lw =2,color = 'b')
-    ax1.set_xlim(xLim[1],xLim[0])
-    ax1.set_ylim(yLim[0],yLim[1])
-    
-    plt.xlabel(r'$l[^\circ]$')
-    plt.ylabel(r'$b[^\circ]$')
-    
-    if fileOut != '':
-        pp = PdfPages(fileOut + '.pdf')
-        plt.savefig(pp, format='pdf')
-        print "Figures saved to ", str(fileOut)+ '.pdf\n',
-        pp.close()
-    plt.show()    
-
-        
-def Plot_MC_Centroids(X,Y,fileOut,xLim=(2.5,-2.5),yLim=(-2.5,2.5)):
-    """Plot centroids from a list of monte carlo simulations.  Needs updating"""
-    import pylab,math
-    plt.clf()
-    
-    fig = plt.figure(1)
-    fig.add_subplot(1,1,1,aspect = 'equal')
-    plt.scatter(X,Y, s=1,lw =0,color = 'b',rasterized=True)
-    
-    plt.xlabel(r'$l[^\circ]$')
-    plt.ylabel(r'$b[^\circ]$')
-    #plt.title(r'Centroids')
-    
-    r = []
-    for i in range(len(X)):
-        r.append(math.sqrt(X[i]**2.+Y[i]**2.))
-    sigma = np.std(r)
-    cir = pylab.Circle((np.average(X),np.average(Y)), radius=sigma, alpha =.3, fc='b')
-    cir2 = pylab.Circle((np.average(X),np.average(Y)), radius=sigma*2., alpha =.3, fc='r')
-    cir3 = pylab.Circle((np.average(X),np.average(Y)), radius=sigma*3., alpha =.3, fc='y')
-    
-    cent1 = (-0.12672151515151459, 0.32554675757575757) #106-121
-    cent2 = (-0.768305075000001, 0.13957773025000009) # 121-136
-    cent3 = (-1.2090912941176524, 0.28272128823529419) #136-151
-    plt.scatter(cent1[0],cent1[1], marker = '+', s = 200,lw=2, color = 'r')
-    plt.scatter(cent2[0],cent2[1], marker = '+', s = 200,lw=2, color = 'g')
-    plt.scatter(cent3[0],cent3[1], marker = '+', s = 200,lw=2, color = 'purple')
-    
-    plt.legend(('MC','106-121 GeV','121-136 GeV','136-151 GeV'))
-    pylab.gca().add_patch(cir3)
-    pylab.gca().add_patch(cir2)
-    pylab.gca().add_patch(cir)
-    
-    plt.xlim(xLim)
-    plt.ylim(yLim)
-    
-    if fileOut!='':
-        pp = PdfPages(fileOut + '.pdf')
-        plt.savefig(pp, format='pdf',dpi=300)
-        print "Figures saved to ", str(fileOut)+ '.pdf\n',
-        pp.close()
-
-    #plt.show()    
-    
-    
-
-
-    
-
-
-        
+    if angularSize != None:
+        plt.xlim(angularSize/2.0,-angularSize/2.0)
+        plt.ylim(-angularSize/2.0,angularSize/2.0)
             
-            
-            
-    
-    
-    
-    
-    
-    
+        plt.xlabel(r'$l[^\circ]$')
+        plt.ylabel(r'$b[^\circ]$')
+        plt.title(r'Count Map')
+        if fileOut!='':
+            pp = PdfPages(fileOut + '.pdf')
+            plt.savefig(pp, format='pdf')
+            print "Figures saved to ", str(fileOut)+ '.pdf\n',
+            pp.close()
+            plt.savefig(fileOut + '.png', format='png')
+            return
+        plt.show()    
+

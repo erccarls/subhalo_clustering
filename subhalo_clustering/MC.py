@@ -92,14 +92,6 @@ def Gen_Annihilation_Map(angularSize, size, profile,fileOut):
     return map/np.max(map)
 
 
-def rho_DM_NFW(r,rc,alpha):
-    if (r != 0.0):
-        return (rc/r)**alpha * (1+ r/rc)**(-3+alpha)
-    else:
-        return 0.0
-
-def rho_DM_EIN(r,rc,alpha):
-    return math.exp(-2.0/alpha*((r/rc)**alpha-1.))
 
 
 def RUN(numTrials, rateMap, numPhotons=48, angularSize=10.0, outputSize=300, mcList='MCOut.pickle',HESS=False, Sig = -1 ,numProcs = 10):

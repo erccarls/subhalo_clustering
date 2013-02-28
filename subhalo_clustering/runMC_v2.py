@@ -76,7 +76,7 @@ def run_MC_FLAT():
 
 def run_MC_NFWDECAY():
     """Generate Rate Map and Run Monte-Carlo NFW but not squared"""
-    # Einasto rate map
+    # NFW_DECAY rate map
     profile = ('NFWDECAY',23.5,1.0)
     if run48:
         fileOut = 'NFWDECAYRateMap.pickle'

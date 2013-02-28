@@ -7,89 +7,38 @@ from functools import partial
 
 # Global parameters
 angularSize = 10.0 # box surrounding galactic center
-angularSize2 = 4.0
-size = 300  # size of output ratemap
-numSims = 100000 # Number of simulations to use.
-numSims2 = 2000
-numPhotons = 48
-numPhotons2 = 2000
 outputSize = 300
-
 numProcs = 10
-run48 = False   
-run2000 = True
+
 
 def testing():
-#    profile = ('PULSAR',)    
-#    fileOut = 'PULSARRateMapHESS.pickle'
+    profile = ('PULSAR',)    
+    fileOut = 'PULSARRateMap.pickle'
     #mcSims = MC.RUN_PULSAR(5, fileOut, numPhotons=500,numPulsars=1,angularSize=angularSize2, outputSize=outputSize, mcList='test.pickle',HESS=True)
     #MCSTATS.Plot_MC_Positions(mcSims[0], 'test', angularSize = angularSize2)
     
     #pickle.dump(mcSims, open('test.sim','wb'))
     times1, times2 = [],[]
     nphotons = np.logspace(1, 4, 10)
-    nphotons = [200,]
+    nphotons = [48,]
     import time
     
     for i in nphotons:
-        #mcSims = MC.RUN_PULSAR(10, fileOut, numPhotons=int(i),numPulsars=1,angularSize=angularSize2, outputSize=outputSize, mcList='test.pickle',HESS=False)
+        #profile = ('PULSAR',)
+        #map = MC.Gen_Annihilation_Map(angularSize, 300, profile,fileOut)
+        mcSims = MC.RUN_PULSAR(10, fileOut, numPhotons=int(i),numPulsars=3,angularSize=10, outputSize=outputSize, mcList='test.pickle')
         #mcSims = MC.RUN(1, fileOut, numPhotons=int(i),angularSize=angularSize2, outputSize=outputSize, mcList='test.pickle',HESS=False)
         
+        
         mcSims = pickle.load(open('test.pickle','r'))
-        start = time.time()
-        #dbscanresults = MCSTATS.DBSCAN_Compute_Clusters(mcSims, eps=.1, min_samples=30, nCorePoints=3, S_cut=2.0, numAnalyze=0,  HESS=True, angularSize=angularSize2, indexing = False)
-        elapsed1 = time.time()-start
-        start = time.time()
-        dbscanresults = MCSTATS.DBSCAN_Compute_Clusters(mcSims, eps=.1, min_samples=3, nCorePoints=3, S_cut=2.0, numAnalyze=0,  HESS=True, angularSize=angularSize2, indexing = True)
-        elapsed2 = time.time()-start
-        print 'nPhotons, Times:', i, elapsed1, elapsed2
-        times1.append(elapsed1)
-        times2.append(elapsed2)
-    pickle.dump((nphotons, elapsed1,elapsed2),open('times.out','wb'))
-
-    
-#    import time
-#    #mcSims = MC.RUN_PULSAR(1, 'PULSARRateMapHESS.pickle', numPhotons=1000,numPulsars=3,angularSize=angularSize2, outputSize=outputSize, mcList='test.pickle',HESS=False)
-#    mcSims = pickle.load(open('test.pickle','r'))
-#    start = time.time()
-#    dbscanresults = MCSTATS.DBSCAN_Compute_Clusters(mcSims, eps=.1, n_cluster=3, nCore=3, S_cut=2.0, numAnalyze=0,  HESS=True, angularSize=angularSize2, indexing = True)
-#    print 'time', time.time()-start
-
-
-
-
-from matplotlib import pyplot as plt
-nphotons = [1e2,1e3,2e3,4e3,1e4]
-old = [.096,.325,25,192,0]
-new = [.184,1.637,3.78,11.1,54] 
-
-plt.plot(nphotons,old, label = 'No Indexing')
-plt.plot(nphotons,new, label = 'R-tree Indexing')
-plt.xscale('log')
-plt.yscale('log')
-plt.ylabel('time per core (s)')
-plt.xlabel('num photons')
-plt.legend()
-#plt.show()
-
-#    
-    #idx = INDEX.Index()
-
-    #X ,Y = np.array(np.zeros(100000)), np.array(np.ones(100000))
-    #dist(X,Y)
-    
-    
-    #[2.*arcsin(sqrt(pow(sin( .5*(Y[0]-Y[i])),2.) + cos(Y[0])*cos(Y[i])*pow(sin(.5*(X[0]-X[i])),2.))) for i in range(100000)]
-    
+        dbscanResults = MCSTATS.DBSCAN_Compute_Clusters(mcSims, eps=.15, min_samples=3, nCorePoints=3, numAnalyze=0)
+        
+        print MCSTATS.Cluster_Sigs_BG(dbscanResults)
         
 
 
 import cProfile
 import pycallgraph
-profile = ('PULSAR',)    
-fileOut = 'PULSARRateMapHESS.pickle'
-#mcSims = MC.RUN_PULSAR(1, fileOut, numPhotons=100000,numPulsars=1,angularSize=angularSize2, outputSize=outputSize, mcList='test.pickle',HESS=True)
-
 
 pycallgraph.start_trace()
 cProfile.run('testing()','profile')

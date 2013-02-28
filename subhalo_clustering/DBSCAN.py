@@ -97,7 +97,7 @@ def Evaluate_BG_Contribution(x,y,radius, BGTemplate, numBGEvents, flatLevel = 0)
     return float(weave.inline(code,['radius','BGTemplate','size','x','y','start'], compiler='gcc', type_converters = converters.blitz)) 
             
     
-def Compute_Cluster_Significance(X, BGTemplate, totalPhotons,outputSize=300, angularSize = 10.0,flatLevel = 0,SNR = .75):
+def Compute_Cluster_Significance(X, BGTemplate, totalPhotons,outputSize=300, angularSize = 10.0,flatLevel = 0,BG = .75):
     """
     Takes input list of coordinate pairs (in angular scale) and computes the cluster significance based on a background model.
     
@@ -105,7 +105,9 @@ def Compute_Cluster_Significance(X, BGTemplate, totalPhotons,outputSize=300, ang
         -X is a tuple containing a coordinate pair for each point in a cluster.  
         -BGTemplate is the pickled background array used.
         -totalPhotons is the total number of all photons.  This is used to estimate the background count.
-    
+        
+        -flatLevel: What fraction of background is isotropic? 1 for completely isotropic 
+        -BG: Average fraction of total photons that are background.
     returns significance
     """
     # Default to zero significance
@@ -113,7 +115,7 @@ def Compute_Cluster_Significance(X, BGTemplate, totalPhotons,outputSize=300, ang
     
     # Otherwise.......
     x,y = np.transpose(X) # Reformat input
-    numBGEvents = totalPhotons*SNR # Number of expected background events.  Based on power law extrapolation from 10-300 GeV excluding 120-140 GeV
+    numBGEvents = totalPhotons*BG # Number of expected background events.  Based on power law extrapolation from 10-300 GeV excluding 120-140 GeV
     ppa = float(outputSize)/float(angularSize) # pixels per degree
     centX,centY = np.mean(x), np.mean(y) # Compute Centroid
     
