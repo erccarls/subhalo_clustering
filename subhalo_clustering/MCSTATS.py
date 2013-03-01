@@ -24,7 +24,7 @@ from multiprocessing import pool
 from functools import partial
 
 
-def DBSCAN_Compute_Clusters(mcSims, eps, min_samples ,nCorePoints = 3, numAnalyze=0, fileout = '',numProcs = 1):
+def DBSCAN_Compute_Clusters(mcSims, eps, min_samples ,nCorePoints = 3, numAnalyze=0, fileout = '',numProcs = 1, indexing = None):
     '''
     Main DBSCAN cluster method.  Input a list of simulation outputs and output a list of clustering properties for each simulation.
     Inputs:
@@ -35,6 +35,7 @@ def DBSCAN_Compute_Clusters(mcSims, eps, min_samples ,nCorePoints = 3, numAnalyz
         nCorePoints=3: After DBSCAN is run, there must be at least this many points for a cluster to not be thrown out.
         numAnalyze=0 : number of simulations to analyze out of list.  default is 0 which analyzes all of them
         fileout=''   : if not empty string, store all the clustering info in a pickle file.
+        indexing     : if None, automatically choose fastests method. True, always uses grid index, if False always computes distance matrix
     Returns:
         dbScanResults: a tuple (clusterReturn, labels) for each simulation
             clusterReturn: For each cluster, a list of points in that cluster
@@ -54,7 +55,7 @@ def DBSCAN_Compute_Clusters(mcSims, eps, min_samples ,nCorePoints = 3, numAnalyz
     
     
 
-    DBSCAN_PARTIAL = partial(DBSCAN_THREAD,  eps=eps, min_samples=min_samples,nCorePoints = nCorePoints)
+    DBSCAN_PARTIAL = partial(DBSCAN_THREAD,  eps=eps, min_samples=min_samples,nCorePoints = nCorePoints, indexing = indexing)
     
     # Call mutithreaded map. 
     dbscanResults = p.map(DBSCAN_PARTIAL, mcSims[:numAnalyze])
@@ -62,8 +63,8 @@ def DBSCAN_Compute_Clusters(mcSims, eps, min_samples ,nCorePoints = 3, numAnalyz
     # Serial Version.  Only use for debugging
     #dbscanResults = map(DBSCAN_PARTIAL, mcSims[:numAnalyze])
     
-    # Single Call Version. Useful for Debugging
-    #dbscanResults = DBSCAN_THREAD(mcSims[0],  eps=eps, min_samples=min_samples,nCorePoints = nCorePoints)
+    #Single Call Version. Useful for Debugging
+    #dbscanResults = DBSCAN_THREAD(mcSims[0],  eps=eps, min_samples=min_samples,nCorePoints = nCorePoints, indexing = indexing)
     
     # Write to file if requested
     if (fileout != ''): pickle.dump(dbscanResults, open(fileout,'wb'))

@@ -105,19 +105,20 @@ def dbscan3(X, eps=0.5, min_samples=5, metric='euclidean', indexing =True):
     # Select points within bounding box of width 2*epsilon centered on point
     # of interest.  This gives a quick way to only compute distances for nearest
     # neighbors.
-    #===========================================================================
+    #===========================================================================    
     GTX,GTY = np.transpose(X)
     def epsQuery(i):
         xcut = where( ((X[i][0]-eps <= GTX ) & (GTX <= X[i][0]+eps)))[0]
         return xcut[where(  ((X[i][1]-eps <= GTY[xcut]) & (GTY[xcut] < X[i][1]+eps) ))[0]]
-    neighborhoods = [epsQuery(i) for i in range(0,n)]
     
+    neighborhoods = [epsQuery(i) for i in range(0,n)]
+        
     #===========================================================================
     # Refine the epislon neighborhoods
     #===========================================================================
     if (metric == 'euclidean'):
         # Compute distances using numpy vector methods ONLY if neighborhood size 
-        # is already greater than min_samples, otherwise don't bother.  
+        # is already greater than min_samples, otherwise don't bother.          
         neighborhoods = [(neighborhoods[i][where( sum(square( X[neighborhoods[i]] - X[i]),axis=1) <= eps*eps)[0]]) if len(neighborhoods[i])>=min_samples else neighborhoods[i] for i in range(0,n)]
     #TODO: implement spherical refinement
     
@@ -332,7 +333,7 @@ class DBSCAN(BaseEstimator, ClusterMixin):
         """
         if (self.indexing == None):
             # automatically choose based on photon count.  Use indexing automatically for high photons counts
-            if len(X[0])>2000:
+            if len(X)>2000:
                 self.core_sample_indices_, self.labels_ = dbscan3(X,
                                                          **self.get_params())
             else:
