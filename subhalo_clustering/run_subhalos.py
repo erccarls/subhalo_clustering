@@ -20,7 +20,7 @@ alpha  = 1.5  #
 f_s    = .25  # signal fraction
 mu_res = 20.  # num photons in resolvable limit
 angularSize = 20. # simulate square of this width in deg.
-deltaTheta  = 0.5 # PSF in deg
+deltaTheta  =  0.5 # PSF in deg
 
 
 
