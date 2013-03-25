@@ -1,3 +1,13 @@
+#===============================================================================
+# MC2.py
+# Primary Monte Carlo code which generates photon event maps based on DM subhalo
+# models in the MW.  
+# Author: Eric Carlson
+# Updated: 03/24/2013
+#===============================================================================
+
+
+
 import numpy as np
 import time, pickle
 import matplotlib.pyplot as plt
@@ -142,13 +152,27 @@ class MC():
         XMASTER += np.cos(theta)*np.array(r)
         YMASTER += np.sin(theta)*np.array(r)
         return list(XMASTER),list(YMASTER)
+    
+    def __ApplyGaussianPSF(self, XMASTER, YMASTER, theta):
+        r = []
+        num = len(XMASTER)
+        while (num != 0):
+            X,Y = np.random.rand(2,num)
+            X = 4.*theta*X
+            new = list(X[np.where(Y <= np.exp((-np.square(X)/(theta*theta))))[0]])
+            r+=new
+            num-=len(new)
+        theta = np.random.rand(len(r))*2.*np.pi
+        XMASTER += np.cos(theta)*np.array(r)
+        YMASTER += np.sin(theta)*np.array(r)
+        return list(XMASTER),list(YMASTER)
         
-        
-    def RunAll(self,numSims,numProcs=1):
+    def RunAll(self,numSims,numProcs=1, theta= 0.5):
         """
         Runs All Queued Monte-Carlo Simulations.
         Inputs:
             numSims: number of simulations to use.
+            theta: Gaussian PSF in degrees
             numProcs: Number of simultaneous threads to use.
         """
         # Initialize the thread pool
@@ -168,35 +192,38 @@ class MC():
             X,Y= [], []      # Initialize Photon List    
             X,Y = self.__RunSubhalos(X,Y) # Run Subhalo simulations
             X,Y = self.__RunPointSources(X,Y) # Run Subhalo simulations
-            X,Y =self.__ApplyPSF(X, Y, PSFTableFront, PSFTableBack) # PSF modulation
-            
+            #X,Y =self.__ApplyPSF(X, Y, PSFTableFront, PSFTableBack) # PSF modulation
+            X, Y = self.__ApplyGaussianPSF(X,Y, theta)
             # Simulate Isotropic Backgrounds (don't bother with PSF for these)
             X,Y = self.__RunIsotropicSources(X,Y)
             return X,Y
         #=======================================================================
         
-        result = p.map(RunSingle,range(numSims)) # Multithreaded map
-        #result = map(RunSingle,range(numSims))    # Serial Map 
+        #result = p.map(RunSingle,range(numSims)) # Multithreaded map
+        result = map(RunSingle,range(numSims))    # Serial Map 
         # Run Stats 
         print 'Ran ', numSims, " simulations in ", time.time()-start , " seconds. (", numSims/(time.time()-start) , " sims/sec)"
         
         return result
 
 
+
+
         
-#mc = MC(numPhotons = 0,AngularSize=50.)
-#for i in range(0,10):
-#    mc.AddNFWSubhalo(flux=20,pos=None,rs=np.random.rand()*10,alpha=1)
-#    mc.AddPointSource(flux=20,pos=None)
-#mc.AddIsotropicSource(300)
-#X,Y = mc.RunAll(numSims = 1, numProcs = 1)[0]
-#
-#import MCSTATS
-#start = time.time()
-#print len(MCSTATS.DBSCAN_Compute_Clusters([(X,Y),], .15, min_samples=10, indexing = False)[0][0])
-#print time.time()-start
-#plt.scatter(X, Y, s=.5)
-#plt.show()
+mc = MC(numPhotons = 0,AngularSize=20.)
+
+for i in range(0,10):
+    #mc.AddNFWSubhalo(flux=20,pos=None,rs=np.random.rand()*10,alpha=1)
+    mc.AddPointSource(flux=20,pos=None)
+mc.AddIsotropicSource(300)
+X,Y = mc.RunAll(numSims = 1, theta = 0.5, numProcs = 1)[0]
+
+import MCSTATS
+start = time.time()
+print len(MCSTATS.DBSCAN_Compute_Clusters([(X,Y),], .15, min_samples=10, indexing = False)[0][0])
+print time.time()-start
+plt.scatter(X, Y, s=.5)
+plt.show()
 
 
 
