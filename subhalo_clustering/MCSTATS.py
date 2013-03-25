@@ -182,100 +182,19 @@ def Plot_Cluster_Scales(models, labels,xlabel, fig, subplot, bins = 100, fileout
     Generates the results summary plots.  See sample usage in runMC_v2
     """
     
-    width = .08
-      
-    fig.add_subplot(4,2,abs(subplot))      
+    bins = np.linspace(0,5, 6)
+    
+    
+    fig.add_subplot(4,1,abs(subplot))      
     
     hist = []
     for i in models:
-        if (abs(subplot) == 5 or abs(subplot) == 6):
-            if subplot>0:
-                hist.append(np.histogram(i, bins=np.linspace(0, 9, 10)))
-            elif subplot<0:
-                hist.append(np.histogram(i, bins=np.linspace(0, 9, 10)))
-        else:
+        if (subplot == 1):
             hist.append(np.histogram(i, bins=bins))
-        
-    
-    c = ['b','g','r','c','m','y','k','b','g','r']
-    
+        else: hist.append(np.histogram(i,bins = 20))
+            
     for i in range(len(hist)):
-        if  (abs(subplot) == 6 or abs(subplot) == 5):
-            #plt.step(hist[i][1][:-1], np.array(hist[i][0],'float')/len(models[i]), label=labels[i])
-            if subplot>0 and 'Pulsar' in labels[i]:
-                plt.bar(hist[i][1][:-1]+width*(i-7), np.array(hist[i][0],'float')/len(models[i]) , width ,fill = True, label=labels[i], color =c[i])
-            elif 'Pulsar' in labels[i]:
-                plt.bar(hist[i][1][:-1]+width*(i-7), np.array(hist[i][0],'float')/len(models[i]) , width ,fill = True, color =c[i])
-            else:
-                plt.bar(hist[i][1][:-1]+width*(i-7), np.array(hist[i][0],'float')/len(models[i]) , width ,fill = False, label=labels[i], edgecolor =c[i])
-            
-            
-        elif 'Pulsar' in labels[i] and subplot > 0:
-            plt.step(hist[i][1][:-1], np.array(hist[i][0],'float')/len(models[i]), label=labels[i])
-        #elif 'Pulsar' in labels[i] and subplot < 0:
-        #    plt.step(hist[i][1][:-1], np.array(hist[i][0],'float')/len(models[i]), label=labels[i], ls = '--')
-        elif abs(subplot) != 5 and abs(subplot) != 6:
-            plt.step(hist[i][1][:-1], np.array(hist[i][0],'float')/len(models[i]),ls ='--', label=labels[i])
-        else:
-            continue
-            
-#        elif abs(subplot) != 5 and abs(subplot) != 6: 
-#            plt.step(hist[i][1][:-1], np.array(hist[i][0],'float')/len(models[i]),ls ='--', label=labels[i])
-#        else: 
-#            return
-    if subplot == 1 or subplot == 2:
-        high = plt.ylim()[1]
-        ############################################
-        # For Sideband bkg model
-#        plt.fill_betweenx([0,10], [1.198,1.198], [1.44,1.44], facecolor='m', alpha=0.05)
-#        plt.axvline(1.337,ls='-.',color = 'm',label = 'Fermi 120-140 GeV')
-        ############################################
-        # For Galprop bkg model
-        #plt.fill_betweenx([0,10], [1.287,1.287], [1.56,1.56], facecolor='m', alpha=0.05)
-        #plt.axvline(1.4429,ls='-.',color = 'm',label = 'Fermi 120-140 GeV')
-        if subplot == 1:
-            plt.axvline(1.287,ls='-.',color = 'm',label = 'Fermi 120-140 GeV')
-        
-        plt.ylim(0,.25)
-        if subplot == 5:
-            plt.xlim(0,14)
-        
-    if  subplot == 3 and PlotFermiScale ==True:
-        high = plt.ylim()[1]
-        #plt.fill_betweenx([0,10], [.2192,.2192], [.439,.439], facecolor='m', alpha=0.05)
-        ############################################
-        # For Sideband bkg model
-        #plt.axvline(.339,ls='-.',color = 'm')
-        ############################################
-        # For Galprop bkg model
-        #plt.axvline(.34,ls='-.',color = 'm')
-        plt.axvline(.2192,ls='-.',color = 'm')
-        
-        plt.ylim(0,.3)
-        plt.xlim(0,.5)
-        
-    if subplot == 4:
-        plt.ylim(0,.3)
-        plt.xlim(0,.06)
-    
-        
-    if (subplot == 5) and  PlotFermiScale ==True:
-        #plt.axvline(2,ls='-.',color = 'm')
-        plt.xlim(-1,8)
-        plt.ylim(0,1)
-        
-        
-    if subplot==6:
-        plt.xlim(-1,8)
-        plt.ylim(.01,1)
-        #plt.yscale('log')
-        
-    
-    if subplot == 7 and PlotFermiScale ==True:
-        plt.axvline(4,ls='-.',color = 'm')
-        plt.ylim(0,.3)
-    if subplot == 8:
-        plt.ylim(0,.3)
+        plt.step(hist[i][1][:-1], np.array(hist[i][0],'float')/len(models[i]), label=labels[i])
         
     plt.xlabel(xlabel)
     if subplot in [1,3,5,7]:

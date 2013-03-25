@@ -60,17 +60,21 @@ def RunDBScan(X,eps,n_samples,nCorePoints =3 ,indexing = None):
 #===============================================================================
 def Evaluate_BG_Contribution(x,y,radius, BGTemplate, numBGEvents, flatLevel = 0): 
     """
+    # There is an unresolved bug with this code.  DO NOT USE IN CURRENT FORM
     Integrate the background template and return the expected event count.
     
     Inputs:
      -x,y are the centroid of the cluster 
      -radius is the radius of integration in pixels
      -BGTemplate is the pickled background template used.
-     -numBGEvents is the total number of expected background events for the entire angular region being considered. (.75 times
+     -numBGEvents is the total number of expected background events for the entire angular region being considered. (.75 times)
     
     Returns:
     -count: expected number of background events in region.
     """
+    #===========================================================================
+    # There is an unresolved bug with this code.  DO NOT USE IN CURRENT FORM 
+    #===========================================================================
     # Rescale the BG template so that the integral directly gives the event count.
     BGTemplate = np.array(BGTemplate)/float(np.sum(BGTemplate))*(1.0-flatLevel)
     BGTemplate += flatLevel/np.shape(BGTemplate)[0]**2.0  # Add flat Backgronud
@@ -82,6 +86,7 @@ def Evaluate_BG_Contribution(x,y,radius, BGTemplate, numBGEvents, flatLevel = 0)
     x,y = float(x),float(y)
     start = int(-radius-1)
     
+
     # Integrate annulus
     code = """
         double ret = 0.;
@@ -127,7 +132,12 @@ def Compute_Cluster_Significance(X, BGTemplate, totalPhotons,outputSize=300, ang
     clusterRadius = np.sort(r)[countIndex]   # choose the radius at this index 
 
     # Estimate the background count
-    N_bg = Evaluate_BG_Contribution(centX*ppa+outputSize/2.0,centY*ppa+outputSize/2.0,clusterRadius*ppa,BGTemplate,numBGEvents, flatLevel = flatLevel)
+    #N_bg = Evaluate_BG_Contribution(centX*ppa+outputSize/2.0,centY*ppa+outputSize/2.0,clusterRadius*ppa,BGTemplate,numBGEvents, flatLevel = flatLevel)
+    
+    
+    # For now just use isotropic density
+    BGDensity = BG*totalPhotons / angularSize**2
+    N_bg = np.pi * clusterRadius**2. * BGDensity                 
     N_cl = countIndex - N_bg
     
     ######################################################
