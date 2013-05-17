@@ -40,16 +40,20 @@ def rho_DM_EIN(r,rc,alpha):
 class MC():
     def __init__(self, numPhotons, AngularSize):
         self.AngularSize       = AngularSize        # Size in degrees (assumed cartesian)
-        self.PointSources      = []
+        
+        self.PointSourceLocX   = []
+        self.PointSourceLocY   = []
+        self.PointSourceFlux   = []
+        
         self.DiffuseSources    = []
         self.NFWSubhalos       = []
         self.IsotropicSources  = []
         self.numPhotons = numPhotons
     
-    class __PointSource():
-        def __init__(self,flux,pos):
-            self.flux = flux # Flux
-            self.pos  = pos # Position
+#    class __PointSource():
+#        def __init__(self,flux,pos):
+#            self.flux = flux # Flux
+#            self.pos  = pos # Position
             
     class __NFWSubhalo():
         def __init__(self,flux, pos, rs, alpha):
@@ -72,9 +76,9 @@ class MC():
     def AddIsotropicSource(self,flux):
         self.IsotropicSources.append(self.__IsotropicBG(flux))
         
-    def AddPointSource(self, flux, pos=None):
-        if (pos ==None): pos = (np.random.rand(2)-.5)*self.AngularSize
-        self.PointSources.append(self.__PointSource(flux,pos))    
+#    def AddPointSource(self, flux, pos=None):
+#        if (pos ==None): pos = (np.random.rand(2)-.5)*self.AngularSize
+#        self.PointSources.append(self.__PointSource(flux,pos))    
     
     #===============================================================================
     # Monte Carlo
@@ -102,10 +106,16 @@ class MC():
         return XMASTER,YMASTER
     
     def __RunPointSources(self,XMASTER,YMASTER):
-        for source in self.PointSources:
-            numPhotons = np.random.poisson(source.flux)
-            XMASTER += list(source.pos[0]*np.ones(numPhotons))
-            YMASTER += list(source.pos[1]*np.ones(numPhotons))
+        numPhotons = np.random.poisson(self.PointSourceFlux) # pick num photons for each source
+        numPhotonsCum = np.append(np.array([0,]), np.cumsum(numPhotons)) # find cumulative sum
+        XMASTER = np.ones(np.sum(numPhotons)) # create empty arrays (faster than appending lists)
+        YMASTER = np.ones(np.sum(numPhotons)) # create empty arrays
+        # For all sources, generate a list of photons with initial positions given by the corresponding point source position
+        # We will then alter these positions by the PSF below.
+        for i in range(len(numPhotons)):
+            XMASTER[numPhotonsCum[i]:numPhotonsCum[i+1]] = self.PointSourceLocX[i]   
+            YMASTER[numPhotonsCum[i]:numPhotonsCum[i+1]] = self.PointSourceLocY[i]
+        
         return XMASTER, YMASTER
     
     def __RunIsotropicSources(self,XMASTER,YMASTER):
@@ -122,6 +132,7 @@ class MC():
             X,Y: List of X and Y vectors to shift
             psffront, psfback are the PSF tables (theta, PSF) from the PSF FITS file
         """
+        
         PSFTHETA_FRONT,PSFVALUE_FRONT = psffront
         PSFTHETA_BACK,PSFVALUE_BACK = psfback
         # Find 99.9% containment and don't sample beyond this
@@ -153,19 +164,27 @@ class MC():
         YMASTER += np.sin(theta)*np.array(r)
         return list(XMASTER),list(YMASTER)
     
-    def __ApplyGaussianPSF(self, XMASTER, YMASTER, theta):
+    def __ApplyGaussianPSF(self, XMASTER, YMASTER, r68):
         r = []
         num = len(XMASTER)
+        # given r68, calculate what sigma should be for a gaussian PSF to meet this (can solve analytically)
+        sigma = r68/1.0674
+        
         while (num != 0):
             X,Y = np.random.rand(2,num)
-            X = 4.*theta*X
-            new = list(X[np.where(Y <= np.exp((-np.square(X)/(theta*theta))))[0]])
+            X = 5.*sigma*X
+            # Normalize to max=1 and perform MC sampling
+            new = list(X[np.where(Y <=  np.sqrt(2*np.e)/sigma* X*np.exp((-np.square(X)/(sigma*sigma))  ))[0]])
             r+=new
             num-=len(new)
+        
         theta = np.random.rand(len(r))*2.*np.pi
         XMASTER += np.cos(theta)*np.array(r)
         YMASTER += np.sin(theta)*np.array(r)
+        
         return list(XMASTER),list(YMASTER)
+    
+    
     
     #=======================================================================
     # Define single variable function for each simulation
@@ -173,11 +192,20 @@ class MC():
         np.random.seed() # New random seed
         X,Y= [], []      # Initialize Photon List    
         X,Y = self.__RunSubhalos(X,Y) # Run Subhalo simulations
+        
+        start = time.time()
         X,Y = self.__RunPointSources(X,Y) # Run Subhalo simulations
+        print "Finished RunPointSources sources in : " , time.time() - start, ' s'
+        
         #X,Y =self.__ApplyPSF(X, Y, PSFTableFront, PSFTableBack) # PSF modulation
+        start = time.time()
         X, Y = self.__ApplyGaussianPSF(X,Y, theta)
+        print "Finished apply PSF in : " , time.time() - start, ' s'
+        
         # Simulate Isotropic Backgrounds (don't bother with PSF for these)
+        start = time.time()
         X,Y = self.__RunIsotropicSources(X,Y)
+        print "Finished isotropic sources in : " , time.time() - start, ' s'
         return X,Y
     #=======================================================================
     
@@ -185,44 +213,44 @@ class MC():
     
     
     
-#    def RunAll(self,numSims,numProcs=1, theta= 0.5):
-#        """
-#        Runs All Queued Monte-Carlo Simulations.
-#        Inputs:
-#            numSims: number of simulations to use.
-#            theta: Gaussian PSF in degrees
-#            numProcs: Number of simultaneous threads to use.
-#        """
-#        # Initialize the thread pool
-#        if (numProcs<=0):numProcs += mp.cpu_count()
-#        p = pool.Pool(numProcs)
-#        # Run stats
-#        #print "Running " , numSims, " simulations using ", numProcs, " thread(s)..." 
-#        #start = time.time()
-#        # Load PSF
-#        PSFTableFront = FermiPSF.PSF_130(convType='front') # load PSF front converting
-#        PSFTableBack = FermiPSF.PSF_130(convType='back')   # load PSF back converting #Currently 130
-#        
-#        #=======================================================================
-#        # Define single variable function for each simulation
-#        def RunSingle(i):
-#            np.random.seed() # New random seed
-#            X,Y= [], []      # Initialize Photon List    
-#            X,Y = self.__RunSubhalos(X,Y) # Run Subhalo simulations
-#            X,Y = self.__RunPointSources(X,Y) # Run Subhalo simulations
-#            #X,Y =self.__ApplyPSF(X, Y, PSFTableFront, PSFTableBack) # PSF modulation
-#            X, Y = self.__ApplyGaussianPSF(X,Y, theta)
-#            # Simulate Isotropic Backgrounds (don't bother with PSF for these)
-#            X,Y = self.__RunIsotropicSources(X,Y)
-#            return X,Y
-#        #=======================================================================
-#        
-#        #result = p.map(RunSingle,range(numSims)) # Multithreaded map
-#        result = map(RunSingle,range(numSims))    # Serial Map 
-#        # Run Stats 
-#        #print 'Ran ', numSims, " simulations in ", time.time()-start , " seconds. (", numSims/(time.time()-start) , " sims/sec)"
-#        
-#        return result
+    def RunAll(self,numSims,numProcs=1, theta= 0.5):
+        """
+        Runs All Queued Monte-Carlo Simulations.
+        Inputs:
+            numSims: number of simulations to use.
+            theta: Gaussian PSF in degrees
+            numProcs: Number of simultaneous threads to use.
+        """
+        # Initialize the thread pool
+        if (numProcs<=0):numProcs += mp.cpu_count()
+        p = pool.Pool(numProcs)
+        # Run stats
+        #print "Running " , numSims, " simulations using ", numProcs, " thread(s)..." 
+        #start = time.time()
+        # Load PSF
+        PSFTableFront = FermiPSF.PSF_130(convType='front') # load PSF front converting
+        PSFTableBack = FermiPSF.PSF_130(convType='back')   # load PSF back converting #Currently 130
+        
+        #=======================================================================
+        # Define single variable function for each simulation
+        def RunSingle(i):
+            np.random.seed() # New random seed
+            X,Y= [], []      # Initialize Photon List    
+            X,Y = self.__RunSubhalos(X,Y) # Run Subhalo simulations
+            X,Y = self.__RunPointSources(X,Y) # Run Subhalo simulations
+            #X,Y =self.__ApplyPSF(X, Y, PSFTableFront, PSFTableBack) # PSF modulation
+            X, Y = self.__ApplyGaussianPSF(X,Y, theta)
+            # Simulate Isotropic Backgrounds (don't bother with PSF for these)
+            X,Y = self.__RunIsotropicSources(X,Y)
+            return X,Y
+        #=======================================================================
+        
+        #result = p.map(RunSingle,range(numSims)) # Multithreaded map
+        result = map(RunSingle,range(numSims))    # Serial Map 
+        # Run Stats 
+        #print 'Ran ', numSims, " simulations in ", time.time()-start , " seconds. (", numSims/(time.time()-start) , " sims/sec)"
+        
+        return result
 
 
 
@@ -231,10 +259,10 @@ class MC():
 
         
 #mc = MC(numPhotons = 0,AngularSize=20.)
-#
+
 #for i in range(0,10):
-#    #mc.AddNFWSubhalo(flux=20,pos=None,rs=np.random.rand()*10,alpha=1)
-#    mc.AddPointSource(flux=20,pos=None)
+    #mc.AddNFWSubhalo(flux=20,pos=None,rs=np.random.rand()*10,alpha=1)
+    #mc.AddPointSource(flux=20,pos=None)
 #mc.AddIsotropicSource(300)
 #X,Y = mc.RunAll(numSims = 1, theta = 0.5, numProcs = 1)[0]
 #

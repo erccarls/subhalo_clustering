@@ -93,12 +93,16 @@ def Cluster_Sigs_BG(dbscanResults, BGTemplate = 'BGRateMap.pickle',angularSize =
     if (numProcs<=0):numProcs += mp.cpu_count()
     p = mp.pool.Pool(numProcs)
     
+    #===========================================================================
+    # Currently assuming isotropic BG
+    #===========================================================================
     # Load background template
-    BGTemplate = pickle.load(open(BGTemplate,'r'))
+    #BGTemplate = pickle.load(open(BGTemplate,'r'))
 
-    # Asynchronosly map results
-    BG_PARTIAL = partial(BG_THREAD, BGTemplate= BGTemplate, angularSize = angularSize, BG = BG)
+    # Asynchronosly map results 
+    BG_PARTIAL = partial(BG_THREAD, BGTemplate= '', angularSize = angularSize, BG = BG)
     return p.map(BG_PARTIAL,dbscanResults)
+
 
 def BG_THREAD(sim,BGTemplate, angularSize , BG ):
     clusters,labels = sim 

@@ -8,19 +8,19 @@
 
 import numpy as np
 from matplotlib import pyplot as plt
-import MC2, pickle
+import MC2, cPickle as pickle
 import multiprocessing as mp
 import MCSTATS
 
 
 # Configureation and Global Declarations
 numSims      = int(1e0)
-totalPhotons = int(1e3)
+totalPhotons = int(1e6)
 alpha  = 1.5  # 
 f_s    = .25  # signal fraction
 mu_res = 20.  # num photons in resolvable limit
 angularSize = 20. # simulate square of this width in deg.
-deltaTheta  =  0.5 # PSF in deg
+deltaTheta  =  0.5 # 68% containment PSF in deg (using gaussian for now)
 
 
 
@@ -37,7 +37,7 @@ A = numSig/(mu_res**(2.-alpha) / (2.-alpha)) # integrate distribution according 
 
 
  #==============================================================================
- # This runs each monte-carlo.  It is fairly slow because there are so many point
+ # This runs each monte-carlo.  It is fairly slow because there are so many points
  # in a large angular region 
  #==============================================================================
 def Run():
@@ -52,11 +52,15 @@ def Run():
             X = X*mu_res
             s += list(A * X[np.where(Y <= X**-alpha)[0]]) # append list where the monte-carlo sampling was valid
         
-        # Now we have a number of photons, s[i] assigned to each subhalo i
+        # Get coordinates of subhalo point sources
+        locX, locY = np.random.rand(2,numSubhalos)
+        
+        # Now we have a number of photons, s[i] assigned to each subhalo i with coordinates locX, locY
         # Initialize the monte-carlo, and add subhalos with the appropriate flux.
-        mc = MC2.MC(numPhotons = 0,AngularSize=angularSize) # For now numPhotons is not used, but rather the flux is just the number of photons 
-        # Add each point source  NEED TO VECTORIZE THIS STEP
-        [mc.AddPointSource(flux=numPhotons,pos=None) for numPhotons in s]
+        mc = MC2.MC(numPhotons = 0,AngularSize=angularSize) # For now numPhotons is not used, but rather the flux is just the number of photons
+        mc.PointSourceLocX    = locX
+        mc.PointSourceLocY    = locY
+        
         # Add isotropic BG
         mc.AddIsotropicSource(flux=numBG)
         # Run simulation and return list of coordinate pairs
@@ -65,6 +69,9 @@ def Run():
 
 # Initialize and run monte-carlo simulations 
 mcSims = [Run() for i in range(numSims)]
+print len(mcSims[0][0])
+plt.scatter(mcSims[0][0], mcSims[0][1], s = 1.)
+plt.show()
 # Serialize to file
 pickle.dump(mcSims, open('sims.pickle', 'wb'))
 
@@ -78,14 +85,16 @@ meanBG = numBG / angularSize**2.# Mean BG Density per square deg.
 nMin = np.pi*eps**2.*meanBG + 3*np.sqrt(np.pi*eps**2.*meanBG) # 3 sigma BG fluctuation
 
 mcSims = pickle.load(open('sims.pickle', 'r'))
-dbscanResults = MCSTATS.DBSCAN_Compute_Clusters(mcSims, eps=eps, min_samples=nmin)
 
+dbscanResults = MCSTATS.DBSCAN_Compute_Clusters(mcSims, eps=eps, min_samples=nMin)
 # Return a list of cluster significances for each cluster in each simulation assuming a uniform background contribution
-sigs = Cluster_Sigs_BG(dbscanResults, BGTemplate = 'BGRateMap.pickle',angularSize = 10.,BG= 0.75,numProcs = 1)
-
+sigs = MCSTATS.Cluster_Sigs_BG(dbscanResults, BGTemplate = 'BGRateMap.pickle',angularSize = angularSize,BG= 0.75,numProcs = 1)
+print sigs
 # If we want we could concatenate into a giant list of all clusters
-s = []
-[s+=list(sig) for sig in sigs]
+s = np.array(sigs).flatten()
+print s
+plt.hist(s, 50,histtype='step')
+plt.show()
 
 
 
