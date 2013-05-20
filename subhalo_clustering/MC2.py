@@ -108,6 +108,7 @@ class MC():
     def __RunPointSources(self,XMASTER,YMASTER):
         numPhotons = np.random.poisson(self.PointSourceFlux) # pick num photons for each source
         numPhotonsCum = np.append(np.array([0,]), np.cumsum(numPhotons)) # find cumulative sum
+        print "Num signal photons after poisson sample: ", np.sum(numPhotons)
         XMASTER = np.ones(np.sum(numPhotons)) # create empty arrays (faster than appending lists)
         YMASTER = np.ones(np.sum(numPhotons)) # create empty arrays
         # For all sources, generate a list of photons with initial positions given by the corresponding point source position
@@ -191,7 +192,7 @@ class MC():
     def RunSingle(self,theta = 0.5):
         np.random.seed() # New random seed
         X,Y= [], []      # Initialize Photon List    
-        X,Y = self.__RunSubhalos(X,Y) # Run Subhalo simulations
+        #X,Y = self.__RunSubhalos(X,Y) # Run Subhalo simulations
         
         start = time.time()
         X,Y = self.__RunPointSources(X,Y) # Run Subhalo simulations
@@ -236,7 +237,7 @@ class MC():
         def RunSingle(i):
             np.random.seed() # New random seed
             X,Y= [], []      # Initialize Photon List    
-            X,Y = self.__RunSubhalos(X,Y) # Run Subhalo simulations
+            #X,Y = self.__RunSubhalos(X,Y) # Run Subhalo simulations
             X,Y = self.__RunPointSources(X,Y) # Run Subhalo simulations
             #X,Y =self.__ApplyPSF(X, Y, PSFTableFront, PSFTableBack) # PSF modulation
             X, Y = self.__ApplyGaussianPSF(X,Y, theta)
