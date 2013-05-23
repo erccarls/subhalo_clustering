@@ -2,7 +2,7 @@
 """
 DBSCAN: Density-Based Spatial Clustering of Applications with Noise
 
-Modified from Sklearn libraries.  Incorporates R-tree spatial indexing
+Modified from Sklearn libraries.  
 """
 import warnings
 import numpy as np

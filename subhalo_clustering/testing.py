@@ -4,12 +4,18 @@ import numpy as np
 import sys, math
 from matplotlib.backends.backend_pdf import PdfPages
 from functools import partial
+from matplotlib import pyplot as plt
 
 # Global parameters
 angularSize = 10.0 # box surrounding galactic center
 outputSize = 300
 numProcs = 10
 
+from scipy import stats
+k = np.array(range(12,30))
+dist = stats.poisson(15)
+plt.plot(k,dist.pmf(k))
+plt.show()
 
 def testing():
     profile = ('PULSAR',)    
@@ -40,6 +46,6 @@ def testing():
 import cProfile
 import pycallgraph
 
-pycallgraph.start_trace()
-cProfile.run('testing()','profile')
-pycallgraph.make_dot_graph('test.png')
+#pycallgraph.start_trace()
+#cProfile.run('testing()','profile')
+#pycallgraph.make_dot_graph('test.png')

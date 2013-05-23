@@ -34,7 +34,10 @@ mu_res = S_res*exposure  # num photons in resolvable limit
 angularSizePercent = 0.325 # percent of sky covered by Fermi
 deltaTheta  =  0.5 # 68% containment PSF in deg (using gaussian for now)
 
-angularSize = np.sqrt(4.*np.pi*angularSizePercent / deg2rad**2.) # Simulate square with angular size matching exposure area
+angularSize = np.sqrt(4*np.pi*angularSizePercent)/deg2rad # Simulate square with angular size matching exposure area
+
+print angularSize
+
 #angularSize = 20. # simulate square of this width in deg.
 Omega = (deg2rad*angularSize)**2. # Solid angle of simulation
 
@@ -44,22 +47,16 @@ Omega = (deg2rad*angularSize)**2. # Solid angle of simulation
 #===============================================================================
 numSig = f_s*N_tot                  # Number of signal photons
 numBG  = N_tot - numSig             # Number of background photons
-N_max = N_tot/mu_res                # Maximal number of subhalos (cf. eqn 5)
-N_eff = int( (2-alpha)*f_s*N_max)   # Effective number of subhalos
 
-print N_tot, numSig
-print N_max, N_eff
+#N_max = N_tot/mu_res                # Maximal number of subhalos (cf. eqn 5)
+#N_eff = int( (2-alpha)*f_s*N_max)   # Effective number of subhalos
+#print N_tot, numSig
+#print N_max, N_eff
+#import scipy.integrate as integrate
+#A = numSig/ N_eff / integrate.quad(lambda n: n**(-alpha+1), 0, mu_res)[0] # Normalize distribution according to eqn 3
+#print 'integrated', N_eff * integrate.quad(lambda x: x**(-alpha)*x,0,20)[0]
 
-
-import scipy.integrate as integrate
-print 
-
-A = numSig/ N_eff / integrate.quad(lambda n: n**(-alpha+1), 0, mu_res)[0] # Normalize distribution according to eqn 3
-
-print 'integrated', N_eff * integrate.quad(lambda x: x**(-alpha)*x,0,20)[0]
-
-maxY = A*(.01**-alpha)
-print maxY 
+maxY = (.1**-alpha)
 #plt.loglog(np.logspace(-1, 2, 50),A*np.power(np.logspace(-1, 2, 50),-alpha))
 #plt.show()
  
@@ -74,20 +71,32 @@ def Run():
         # subhalo flux distribution function is dN/dS = A S^{-\alpha}
         # normalization set so that dN/dS=1 when S = 0.1 which should provide good enough sampling
         # Now we sample the distribution
+        np.random.seed()
         s = []
-        while (N_eff != len(s)):
-            X,Y = np.random.rand(2,N_eff-len(s)) # generate random numbers [0,1]
+        n_phot = 0 # counter with current number of signal photons
+        while (n_phot < numSig):
+            X,Y = np.random.rand(2,int((numSig-n_phot)/mu_res + 1)) # generate random numbers [0,1]
             Y = Y*maxY # max number of photons
-            X = X*10*mu_res # rescale the possible fluxes up to max number of photons before being resolved 
-            s += list(X[np.where(Y <= A*(X**-alpha))[0]]) # append num photons where Monte Carlo was sampled successfully 
-        
-        plt.loglog(np.logspace(-1,2,50),A*(np.logspace(-1,2,50)**-alpha)) 
-        plt.hist(s,histtype='step')
-        plt.show()
-        
-        print len(s)
+            X = X*mu_res # rescale the possible fluxes up to max number of photons before being resolved
+            # Poisson sample where Y was less than the distribution
+            
+            set = X[np.where(Y <= (X**-alpha))[0]]
+            if len(set)>1: new = np.random.poisson(set) 
+            elif len(set==1): new = [np.random.poisson(set),]
+                
+            # Filter out those clusters which contribute zero photons
+            set = np.where(new>0)[0]
+            # if no new clusters with > 1 photon, contiue loop
+            if len(set)>1:
+                n_phot += np.sum(new[set]) # Add to total number of photons
+                s      += list(new[set])   # append the new subhalo fluxes
+            elif len(set)==1:
+                n_phot += np.sum(new[set])
+                s      += [new[set],]
+        print 'Number of photons', n_phot
+        print 'Number of Clusters', len(s)
         # Assign coordinates (in degrees) to each subhalo point source 
-        locX, locY = (np.random.rand(2,N_eff)-.5)*angularSize
+        locX, locY = (np.random.rand(2,len(s))-.5)*angularSize
         
         # Now we have a number of photons, s[i] assigned to each subhalo i with coordinates locX, locY
         # Initialize the monte-carlo, and add subhalos with the appropriate flux.

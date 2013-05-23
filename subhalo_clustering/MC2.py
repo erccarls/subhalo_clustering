@@ -106,9 +106,10 @@ class MC():
         return XMASTER,YMASTER
     
     def __RunPointSources(self,XMASTER,YMASTER):
-        numPhotons = np.random.poisson(self.PointSourceFlux) # pick num photons for each source
+        #numPhotons = np.random.poisson(self.PointSourceFlux) # pick num photons for each source
+        numPhotons = self.PointSourceFlux # pick num photons for each source
         numPhotonsCum = np.append(np.array([0,]), np.cumsum(numPhotons)) # find cumulative sum
-        print "Num signal photons after poisson sample: ", np.sum(numPhotons)
+        #print "Num signal photons after poisson sample: ", np.sum(numPhotons)
         XMASTER = np.ones(np.sum(numPhotons)) # create empty arrays (faster than appending lists)
         YMASTER = np.ones(np.sum(numPhotons)) # create empty arrays
         # For all sources, generate a list of photons with initial positions given by the corresponding point source position
@@ -196,17 +197,17 @@ class MC():
         
         start = time.time()
         X,Y = self.__RunPointSources(X,Y) # Run Subhalo simulations
-        print "Finished RunPointSources sources in : " , time.time() - start, ' s'
+        #print "Finished RunPointSources sources in : " , time.time() - start, ' s'
         
         #X,Y =self.__ApplyPSF(X, Y, PSFTableFront, PSFTableBack) # PSF modulation
         start = time.time()
         X, Y = self.__ApplyGaussianPSF(X,Y, theta)
-        print "Finished apply PSF in : " , time.time() - start, ' s'
+        #print "Finished apply PSF in : " , time.time() - start, ' s'
         
         # Simulate Isotropic Backgrounds (don't bother with PSF for these)
         start = time.time()
         X,Y = self.__RunIsotropicSources(X,Y)
-        print "Finished isotropic sources in : " , time.time() - start, ' s'
+        #print "Finished isotropic sources in : " , time.time() - start, ' s'
         return X,Y
     #=======================================================================
     

@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt  #@UnresolvedImport
 import matplotlib.image as mpimg #@UnresolvedImport
 import matplotlib.cm as cm #@UnresolvedImport
 import matplotlib, scipy #@UnresolvedImport
-import pickle, sys
+import cPickle as pickle, sys
 import numpy as np
 import scipy.cluster as cluster
 from matplotlib.backends.backend_pdf import PdfPages
@@ -24,7 +24,7 @@ from multiprocessing import pool
 from functools import partial
 
 
-def DBSCAN_Compute_Clusters(mcSims, eps, min_samples ,nCorePoints = 3, numAnalyze=0, fileout = '',numProcs = 1, indexing = None):
+def DBSCAN_Compute_Clusters(mcSims, eps, min_samples ,nCorePoints = 3, numAnalyze=0, fileout = '',numProcs = 1, indexing = None, plot=False):
     '''
     Main DBSCAN cluster method.  Input a list of simulation outputs and output a list of clustering properties for each simulation.
     Inputs:
@@ -45,8 +45,8 @@ def DBSCAN_Compute_Clusters(mcSims, eps, min_samples ,nCorePoints = 3, numAnalyz
     '''
     
     # Initialize the thread pool
-    if (numProcs<=0):numProcs += mp.cpu_count()
-    p = pool.Pool(numProcs)
+    #if (numProcs<=0):numProcs += mp.cpu_count()
+    #p = pool.Pool(numProcs)
     
     # Check number to analyze
     if ((numAnalyze == 0) or (numAnalyze > len(mcSims))):
@@ -55,13 +55,13 @@ def DBSCAN_Compute_Clusters(mcSims, eps, min_samples ,nCorePoints = 3, numAnalyz
     
     
 
-    DBSCAN_PARTIAL = partial(DBSCAN_THREAD,  eps=eps, min_samples=min_samples,nCorePoints = nCorePoints, indexing = indexing)
+    DBSCAN_PARTIAL = partial(DBSCAN_THREAD,  eps=eps, min_samples=min_samples,nCorePoints = nCorePoints, indexing = indexing,plot=plot)
     
     # Call mutithreaded map. 
-    dbscanResults = p.map(DBSCAN_PARTIAL, mcSims[:numAnalyze])
+    #dbscanResults = p.map(DBSCAN_PARTIAL, mcSims[:numAnalyze])
 
     # Serial Version.  Only use for debugging
-    #dbscanResults = map(DBSCAN_PARTIAL, mcSims[:numAnalyze])
+    dbscanResults = map(DBSCAN_PARTIAL, mcSims[:numAnalyze])
     
     #Single Call Version. Useful for Debugging
     #dbscanResults = DBSCAN_THREAD(mcSims[0],  eps=eps, min_samples=min_samples,nCorePoints = nCorePoints, indexing = indexing)
@@ -73,13 +73,13 @@ def DBSCAN_Compute_Clusters(mcSims, eps, min_samples ,nCorePoints = 3, numAnalyz
 
 
 # Define a single input function callable by each thread (async map can only take one argument)
-def DBSCAN_THREAD(sim, eps, min_samples,nCorePoints,indexing= None):
+def DBSCAN_THREAD(sim, eps, min_samples,nCorePoints,indexing= None,plot=False):
     X = zip(sim[0],sim[1])
-    return DBSCAN.RunDBScan(X, eps, min_samples,nCorePoints = nCorePoints, indexing = indexing)
+    return DBSCAN.RunDBScan(X, eps, min_samples,nCorePoints = nCorePoints, indexing = indexing,plot=plot)
 
 
 
-def Cluster_Sigs_BG(dbscanResults, BGTemplate = 'BGRateMap.pickle',angularSize = 10.,BG= 0.75,numProcs = 1):
+def Cluster_Sigs_BG(dbscanResults,BGPhotons, BGTemplate = 'BGRateMap.pickle',angularSize = 10.,numProcs = 1):
     """
     Compute the cluster significances on results of DBSCAN_Compute_Clusters() using a background model.
     
@@ -90,8 +90,8 @@ def Cluster_Sigs_BG(dbscanResults, BGTemplate = 'BGRateMap.pickle',angularSize =
         BG: The expected percentage of photons that are background
     """
     # Initialize the thread pool to the correct number of threads
-    if (numProcs<=0):numProcs += mp.cpu_count()
-    p = mp.pool.Pool(numProcs)
+    #if (numProcs<=0):numProcs += mp.cpu_count()
+    #p = mp.pool.Pool(numProcs)
     
     #===========================================================================
     # Currently assuming isotropic BG
@@ -100,19 +100,19 @@ def Cluster_Sigs_BG(dbscanResults, BGTemplate = 'BGRateMap.pickle',angularSize =
     #BGTemplate = pickle.load(open(BGTemplate,'r'))
 
     # Asynchronosly map results 
-    BG_PARTIAL = partial(BG_THREAD, BGTemplate= '', angularSize = angularSize, BG = BG)
-    return p.map(BG_PARTIAL,dbscanResults)
+    BG_PARTIAL = partial(BG_THREAD, BGTemplate= '', angularSize = angularSize, BGPhotons = BGPhotons)
+    return map(BG_PARTIAL,dbscanResults)
 
 
-def BG_THREAD(sim,BGTemplate, angularSize , BG ):
+def BG_THREAD(sim,BGTemplate, angularSize , BGPhotons ):
     clusters,labels = sim 
-    return [DBSCAN.Compute_Cluster_Significance(cluster, BGTemplate, len(labels),angularSize = angularSize,BG = BG) for cluster in clusters]
+    return [DBSCAN.Compute_Cluster_Significance(cluster, BGTemplate,BGPhotons = BGPhotons, totalPhotons=len(labels),angularSize = angularSize) for cluster in clusters]
 
 
 #===============================================================================
 # DEPRECATED 
 #===============================================================================
-def Profile_Clusters(dbscanResults, BGTemplate = 'BGRateMap.pickle',S_cut=2.0,angularSize = 10.,BG= 0.75, fileout=''):
+def Profile_Clusters(dbscanResults, BGPhotons, BGTemplate = 'BGRateMap.pickle',S_cut=2.0,angularSize = 10., fileout=''):
     """
     Computes properties on the results of DBSCAN_Compute_Clusters()
         input:
@@ -120,11 +120,11 @@ def Profile_Clusters(dbscanResults, BGTemplate = 'BGRateMap.pickle',S_cut=2.0,an
         Optional Inputs
             S_cut: Clusters used in statistics must be at least this significance level
             BGTemplate = String with path to the background template file
-            BG: The expected percentage of photons that are background
+            BGPhotons: Total number of BG photons expected
             
         
-        Returns: (cluster_Scale, cluster_S, cluster_Count, cluster_Members, cluster_stdevs) as described in draft 
-            cluster_stdevs is the significance weighted RMS of the clustering scale 
+        Returns: (cluster_Scale, cluster_S, cluster_Count, cluster_Members, cluster_out) as described in draft 
+            cluster_out is the significance weighted RMS of the clustering scale 
     """
     
     
@@ -141,7 +141,7 @@ def Profile_Clusters(dbscanResults, BGTemplate = 'BGRateMap.pickle',S_cut=2.0,an
         # Compute Cluster Properties
         #===========================================================================     
         # Determine Cluster Significance from background template
-        S = [DBSCAN.Compute_Cluster_Significance(cluster, BGTemplate, numPhotons,angularSize = angularSize,SNR = BG) for cluster in clusters]
+        S = [DBSCAN.Compute_Cluster_Significance(cluster, BGTemplate, BGPhotons, numPhotons,angularSize = angularSize) for cluster in clusters]
         # Number of clusters
         clusterMembersAll = [len(cluster) for cluster in clusters]
         # list of pairs (s,num members) for each cluster

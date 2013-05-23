@@ -12,8 +12,9 @@ from sklearn import metrics
 import pickle, math
 from scipy import weave
 from scipy.weave import converters
+import gc 
 
-def RunDBScan(X,eps,n_samples,nCorePoints =3 ,indexing = None):
+def RunDBScan(X,eps,n_samples,nCorePoints =3 ,indexing = None, plot=False):
     """
     Runs DBScan on Number-observations-length vector X of coordinate pairs using parameters eps and n_samples defining the search radius and the minimum number of events.
     
@@ -45,12 +46,51 @@ def RunDBScan(X,eps,n_samples,nCorePoints =3 ,indexing = None):
     [validClusters.append(i) if coreLabels.count(i) >= nCorePoints else None for i in set(coreLabels)]
     
     # relabel points that are not in valid clusters as noise.  If you want border points, comment out this line
-    labels = [label if label in validClusters else -1 for label in labels]
-
+    labels = np.array([label if label in validClusters else -1 for label in labels])
     # For each cluster build a list of the core sample coordinates
     X = np.asanyarray(X)
     clusterReturn = [X[np.where((labels == cluster))[0]] for cluster in validClusters]
     
+    #===========================================================================
+    # # Plot result
+    #===========================================================================
+    if (plot == True):   
+        import pylab as pl
+        from itertools import cycle
+        pl.close('all')
+        fig = pl.figure(1)
+        pl.clf()
+        fig = pl.gcf()
+        # Black removed and is used for noise instead.
+        colors = cycle('bgrcmybgrcmybgrcmybgrcmy')
+        
+        for k, col in zip(set(labels), colors):
+            if k == -1:
+                # Black used for noise.
+                col = 'k'
+                markersize = 6
+                    
+            
+            class_members = [index[0] for index in np.argwhere(labels == k)]
+
+            cluster_core_samples = [index for index in core_samples
+                                    if labels[index] == k]
+            
+            
+            for index in class_members:
+                x = X[index]
+                if index in core_samples and k != -1:
+                    markersize = 4
+                    #fig.gca().add_artist(pl.Circle((x[0],x[1]),eps,fc = 'none',ec = col))
+                else:
+                    markersize = 2
+                pl.plot(x[0], x[1], 'o', markerfacecolor=col,
+                        markeredgecolor='k', markersize=markersize)
+        pl.axis('equal')
+        pl.xlabel(r'$l$ [$^\circ$]')
+        pl.ylabel(r'$b$ [$^\circ$]')
+        pl.show()
+
     return (clusterReturn, labels)
     
 
@@ -102,7 +142,7 @@ def Evaluate_BG_Contribution(x,y,radius, BGTemplate, numBGEvents, flatLevel = 0)
     return float(weave.inline(code,['radius','BGTemplate','size','x','y','start'], compiler='gcc', type_converters = converters.blitz)) 
             
     
-def Compute_Cluster_Significance(X, BGTemplate, totalPhotons,outputSize=300, angularSize = 10.0,flatLevel = 0,BG = .75):
+def Compute_Cluster_Significance(X, BGTemplate,BGPhotons, totalPhotons,outputSize=300, angularSize = 10.0,flatLevel = 0):
     """
     Takes input list of coordinate pairs (in angular scale) and computes the cluster significance based on a background model.
     
@@ -120,7 +160,7 @@ def Compute_Cluster_Significance(X, BGTemplate, totalPhotons,outputSize=300, ang
     
     # Otherwise.......
     x,y = np.transpose(X) # Reformat input
-    numBGEvents = totalPhotons*BG # Number of expected background events.  Based on power law extrapolation from 10-300 GeV excluding 120-140 GeV
+    numBGEvents = BGPhotons # Number of expected background events.  Based on power law extrapolation from 10-300 GeV excluding 120-140 GeV
     ppa = float(outputSize)/float(angularSize) # pixels per degree
     centX,centY = np.mean(x), np.mean(y) # Compute Centroid
     
@@ -136,12 +176,17 @@ def Compute_Cluster_Significance(X, BGTemplate, totalPhotons,outputSize=300, ang
     
     
     # For now just use isotropic density
-    BGDensity = BG*totalPhotons / angularSize**2
+    BGDensity = numBGEvents / angularSize**2
     N_bg = np.pi * clusterRadius**2. * BGDensity                 
-    N_cl = countIndex - N_bg
+    #N_cl = countIndex - N_bg
+    
+    # FIXED
+    N_cl = countIndex
+    #print 'N_on, N_off' ,N_cl, N_bg
     
     ######################################################
-    # Evaluate significance as defined by Li & Ma (1983)
+    # Evaluate significance as defined by Li & Ma (1983). 
+    # N_cl corresponds to N_on, N_bg corresponds to N_off
     if N_cl/(N_cl+N_bg)<1e-20 or N_bg/(N_cl+N_bg)<1e-20:
         return 0
     S2 = 2.0*(N_cl*math.log(2.0*N_cl/(N_cl+N_bg))     +      N_bg*math.log(2.0*N_bg/(N_cl+N_bg)))
