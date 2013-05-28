@@ -130,14 +130,18 @@ nMin = np.pi*eps**2.*meanBG + 3*np.sqrt(np.pi*eps**2.*meanBG) # 3 sigma BG fluct
 
 #mcSims = pickle.load(open('sims.pickle', 'r'))
 
-#dbscanResults = MCSTATS.DBSCAN_Compute_Clusters(mcSims, eps=eps, min_samples=nMin)
+
+dbscanResults = MCSTATS.DBSCAN_Compute_Clusters(mcSims, eps=eps, min_samples=nMin)
 # Return a list of cluster significances for each cluster in each simulation assuming a uniform background contribution
-#sigs = MCSTATS.Cluster_Sigs_BG(dbscanResults, BGTemplate = 'BGRateMap.pickle',angularSize = angularSize,BG= 0.75,numProcs = 1)
-print sigs
+sigs = MCSTATS.Cluster_Sigs_BG(dbscanResults, BGTemplate = 'BGRateMap.pickle',angularSize = angularSize,BG= 0.75,numProcs = 1)
+
+#pickle.dump(sigs, open('sigs.pickle', 'wb'))
+
 # If we want we could concatenate into a giant list of all clusters
-s = np.array(sigs).flatten()
-print s
-plt.hist(s, 50,histtype='step')
+#s = np.array(sigs).flatten()
+#print s
+bins = np.linspace(0,10,20)
+plt.hist(sigs, 50,histtype='step')
 plt.show()
 
 

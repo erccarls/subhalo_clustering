@@ -33,9 +33,9 @@ def DBSCAN_Compute_Clusters(mcSims, eps, min_samples ,nCorePoints = 3, numAnalyz
         min_samples: min num points in epislon neighborhood for the DBSCAN algorithm.
     Optional Inputs:
         nCorePoints=3: After DBSCAN is run, there must be at least this many points for a cluster to not be thrown out.
-        numAnalyze=0 : number of simulations to analyze out of list.  default is 0 which analyzes all of them
+        numAnalyze=0 : number of simulations to analyze out of list.  default is 0 which analyzes all simulations passed
         fileout=''   : if not empty string, store all the clustering info in a pickle file.
-        indexing     : if None, automatically choose fastests method. True, always uses grid index, if False always computes distance matrix
+        indexing     : if None, automatically choose fastest method. True, always uses grid index, if False always computes full distance matrix and requires much more memory.
     Returns:
         dbScanResults: a tuple (clusterReturn, labels) for each simulation
             clusterReturn: For each cluster, a list of points in that cluster

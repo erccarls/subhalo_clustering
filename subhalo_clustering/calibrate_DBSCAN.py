@@ -33,34 +33,34 @@ deltaTheta = .5
 #===============================================================================
 # Calibrate N_min
 #===============================================================================
-#def RunSim():
-#    mc = MC2.MC(numPhotons = 0,AngularSize=angularSize) # For now numPhotons is not used, but rather the flux is just the number of photons
-#    mc.AddIsotropicSource(flux=numBG)
-#    return mc.RunSingle(theta = deltaTheta)
-## Run the MC
-#mcSims = [RunSim() for i in range(numSims)]
-## Scan Parameters
-#nMinList = range(12,30,1)
-#n_clus = []
-#
-## Determine number of detected clusters as a function of nMin.  The expected value at 1,2,3 sigma is 18, 22, 25
-#for nMin in nMinList:
-#    dbscanResults = MCSTATS.DBSCAN_Compute_Clusters(mcSims, eps=eps, min_samples=nMin)    
-#    numClusters = len(dbscanResults[0][0])
-#    n_clus.append(numClusters)
-#    print 'nMin', nMin, 'numClusters/expected',  numClusters/1000.
-#    
-#from scipy import stats
-## Fit Gaussian
-#X = np.array(np.linspace(10,30,40))
-#NORM = np.max(n_clus)/np.max(stats.norm.pdf(X, loc=14, scale=3.745))
-#dist = NORM*stats.norm.pdf(X, loc=14 + 3.745, scale=3.745)
-## Plot
-#plt.plot(X, dist)
-#plt.plot(nMinList ,n_clus)
-#plt.xlabel(r'$N_{min}$')
-#plt.ylabel(r'$N_{clusters}$')
-#plt.show()
+def RunSim():
+    mc = MC2.MC(numPhotons = 0,AngularSize=angularSize) # For now numPhotons is not used, but rather the flux is just the number of photons
+    mc.AddIsotropicSource(flux=numBG)
+    return mc.RunSingle(theta = deltaTheta)
+# Run the MC
+mcSims = [RunSim() for i in range(numSims)]
+# Scan Parameters
+nMinList = range(12,30,1)
+n_clus = []
+
+# Determine number of detected clusters as a function of nMin.  The expected value at 1,2,3 sigma is 18, 22, 25
+for nMin in nMinList:
+    dbscanResults = MCSTATS.DBSCAN_Compute_Clusters(mcSims, eps=eps, min_samples=nMin)    
+    numClusters = len(dbscanResults[0][0])
+    n_clus.append(numClusters)
+    print 'nMin', nMin, 'numClusters/expected',  numClusters/1000.
+    
+from scipy import stats
+# Fit Gaussian
+X = np.array(np.linspace(10,30,40))
+NORM = np.max(n_clus)/np.max(stats.norm.pdf(X, loc=14, scale=3.745))
+dist = NORM*stats.norm.pdf(X, loc=14 + 3.745, scale=3.745)
+# Plot
+plt.plot(X, dist)
+plt.plot(nMinList ,n_clus)
+plt.xlabel(r'$N_{min}$')
+plt.ylabel(r'$N_{clusters}$')
+plt.show()
 
 
 # Now that we have established a background rejection threshold (~mean expected BG + 3 sigma), we can tune the epsilon parameter
@@ -125,42 +125,42 @@ numClusters = 20
 #===============================================================================
 # Plot
 #===============================================================================
-ppc = [50,10,20,30] # photons per cluster
-for j in range(len(ppc)):
-    plt.subplot(2,2,j)
-    
-    f = open('eps_vs_nmin'+str(ppc[j]),'rb')
-    NMIN,EPS,SIG,NUM = pickle.load(f)
-    
-    # Contourf 
-    CS = plt.contourf(EPS,NMIN,SIG,levels = np.linspace(0,10,26))
-    # imshow
-#    im = plt.imshow(SIG,aspect='auto',vmin=0,vmax=10.,origin='lower', extent = (EPS[0],EPS[-1],NMIN[0],NMIN[-1]))
-#    im.set_interpolation('nearest')
-#    cbar = plt.colorbar(im)
-    
-    # Make a colorbar for the ContourSet returned by the contourf call.
-    cbar = plt.colorbar(CS)
-    #cbar.ax.set_ylabel('Global Significance')
-    
-    CS = plt.contour(EPS,NMIN,NUM,levels = [1,3,10,15,18,19,20,21,22,23,30,30,40,50],colors='k')
-    plt.clabel(CS,colors='k')
-    # eps-vs-nmin
-    EPS1  = np.linspace(0,1, 50)
-    NMIN0 = (meanBG*np.pi*np.square(EPS1)) + 0.*(np.sqrt(meanBG*np.pi * np.square(EPS1)))
-    NMIN4 = (meanBG*np.pi*np.square(EPS1)) + 3.*(np.sqrt(meanBG*np.pi * np.square(EPS1)))
-    plt.plot(EPS1,NMIN0,label=r'MeanBG', linewidth=4)
-    plt.plot(EPS1,NMIN4,label=r'MeanBG + $3\sigma$',c='r',linewidth=4)
-    plt.text(.7, 15, 'ppc=' + str(ppc[j]))
-    
-    plt.xlabel(r'$\epsilon$')
-    plt.ylabel(r'$N_{min}$')
-    plt.xlim((.2,.9))
-    plt.ylim((10,60))
-    
-
-plt.legend(loc=4,prop={'size':10})
-plt.show()
+#ppc = [50,10,20,30] # photons per cluster
+#for j in range(len(ppc)):
+#    plt.subplot(2,2,j)
+#    
+#    f = open('eps_vs_nmin'+str(ppc[j]),'rb')
+#    NMIN,EPS,SIG,NUM = pickle.load(f)
+#    
+#    # Contourf 
+#    CS = plt.contourf(EPS,NMIN,SIG,levels = np.linspace(0,10,26))
+#    # imshow
+##    im = plt.imshow(SIG,aspect='auto',vmin=0,vmax=10.,origin='lower', extent = (EPS[0],EPS[-1],NMIN[0],NMIN[-1]))
+##    im.set_interpolation('nearest')
+##    cbar = plt.colorbar(im)
+#    
+#    # Make a colorbar for the ContourSet returned by the contourf call.
+#    cbar = plt.colorbar(CS)
+#    #cbar.ax.set_ylabel('Global Significance')
+#    
+#    CS = plt.contour(EPS,NMIN,NUM,levels = [1,3,10,15,18,19,20,21,22,23,30,30,40,50],colors='k')
+#    plt.clabel(CS,colors='k')
+#    # eps-vs-nmin
+#    EPS1  = np.linspace(0,1, 50)
+#    NMIN0 = (meanBG*np.pi*np.square(EPS1)) + 0.*(np.sqrt(meanBG*np.pi * np.square(EPS1)))
+#    NMIN4 = (meanBG*np.pi*np.square(EPS1)) + 3.*(np.sqrt(meanBG*np.pi * np.square(EPS1)))
+#    plt.plot(EPS1,NMIN0,label=r'MeanBG', linewidth=4)
+#    plt.plot(EPS1,NMIN4,label=r'MeanBG + $3\sigma$',c='r',linewidth=4)
+#    plt.text(.7, 15, 'ppc=' + str(ppc[j]))
+#    
+#    plt.xlabel(r'$\epsilon$')
+#    plt.ylabel(r'$N_{min}$')
+#    plt.xlim((.2,.9))
+#    plt.ylim((10,60))
+#    
+#
+#plt.legend(loc=4,prop={'size':10})
+#plt.show()
 
 
 #===============================================================================
